@@ -1,8 +1,7 @@
 import pygame
 import random
 import time
-import streamlit as st
-from streamlit_pygame import streamlit_pygame
+import asyncio  # Necessário para rodar no navegador
 
 # Inicializando o Pygame
 pygame.init()
@@ -18,47 +17,45 @@ PRETO = (0, 0, 0)
 LARGURA_TELA = 800
 ALTURA_TELA = 600
 tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA))
-pygame.display.set_caption("Jogo de Ação")
+pygame.display.set_caption("Jogo de Ação - Warspace")
 
 # FPS
 clock = pygame.time.Clock()
 FPS = 60
 
-# Carregando as imagens
-player_img = pygame.image.load("img/foguete.png")  # Certifique-se de que a imagem está no caminho correto
-player_img = pygame.transform.scale(player_img, (50, 50))  # Redimensionando a imagem se necessário
+# Carregando as imagens (com fallback caso não encontre os arquivos)
+try:
+    player_img = pygame.image.load("img/foguete.png")
+    player_img = pygame.transform.scale(player_img, (50, 50))
+except:
+    player_img = pygame.Surface((50, 50))
+    player_img.fill(AZUL)
 
-enemy_img = pygame.image.load("img/ufo.png")
-enemy_img = pygame.transform.scale(enemy_img, (50, 50))  # Redimensionando o inimigo
+try:
+    enemy_img = pygame.image.load("img/ufo.png")
+    enemy_img = pygame.transform.scale(enemy_img, (50, 50))
+except:
+    enemy_img = pygame.Surface((50, 50))
+    enemy_img.fill(VERMELHO)
 
 bullet_img = pygame.Surface((10, 5))
 bullet_img.fill(VERDE)
 
 enemy_bullet_img = pygame.Surface((10, 5))
-enemy_bullet_img.fill(VERMELHO)  # Cor do tiro do inimigo
+enemy_bullet_img.fill(VERMELHO) 
 
-meteoro_img = pygame.image.load("img/meteoro.png")
-meteoro_img = pygame.transform.scale(meteoro_img, (30, 30))  # Tamanho do meteoro
+try:
+    meteoro_img = pygame.image.load("img/meteoro.png")
+    meteoro_img = pygame.transform.scale(meteoro_img, (30, 30))
+except:
+    meteoro_img = pygame.Surface((30, 30))
+    meteoro_img.fill((150, 150, 150))
 
-# Fundo
-fundo_img = pygame.image.load("img/fundo.png")
-fundo_img = pygame.transform.scale(fundo_img, (LARGURA_TELA, ALTURA_TELA))  # Redimensionando o fundo para preencher a tela
-
-# Carregando imagens
-foguete_img = pygame.Surface((50, 50))
-foguete_img.fill(AZUL)
-
-ufo_img = pygame.Surface((50, 50))
-ufo_img.fill(VERMELHO)
-
-bullet_img = pygame.Surface((10, 5))
-bullet_img.fill(VERDE)
-
-ufo_bullet_img = pygame.Surface((10, 5))
-ufo_bullet_img.fill(VERMELHO)  # Cor do tiro do inimigo
-
-meteoro_png = pygame.Surface((30, 30))
-meteoro_png.fill((150, 150, 150))  # Cor cinza para os meteoros
+try:
+    fundo_img = pygame.image.load("img/fundo.png")
+    fundo_img = pygame.transform.scale(fundo_img, (LARGURA_TELA, ALTURA_TELA))
+except:
+    fundo_img = None
 
 # Classe do jogador
 class Player:
@@ -67,7 +64,7 @@ class Player:
         self.y = ALTURA_TELA // 2
         self.velocidade = 5
         self.vidas = 3
-        self.ultimo_tiro = 0  # Variável para controlar o tempo entre os tiros
+        self.ultimo_tiro = 0  
 
     def mover(self, keys):
         if keys[pygame.K_LEFT] and self.x > 0:
@@ -95,8 +92,8 @@ class Enemy:
         self.x = LARGURA_TELA - 100
         self.y = random.randint(50, ALTURA_TELA - 100)
         self.velocidade = 2
-        self.vida = 150  # Vida do inimigo
-        self.ultimo_tiro = 0  # Controle de tempo do tiro do inimigo
+        self.vida = 150  
+        self.ultimo_tiro = 0  
 
     def mover(self):
         self.y += self.velocidade
@@ -117,7 +114,7 @@ class Enemy:
     def mostrar_vida(self):
         font = pygame.font.SysFont("Arial", 20)
         texto = font.render(f'Vida: {self.vida}', True, BRANCO)
-        tela.blit(texto, (self.x, self.y - 30))  # Exibe a vida acima do inimigo
+        tela.blit(texto, (self.x, self.y - 30)) 
 
 # Classe do meteoro
 class Meteoro:
@@ -157,47 +154,49 @@ class Bullet:
     def desenhar(self):
         tela.blit(bullet_img, (self.x, self.y))
 
-# Função para mostrar texto na tela
+# Funções auxiliares de interface
 def desenhar_texto(msg, cor, pos_x, pos_y, tamanho=30):
     font = pygame.font.SysFont("Arial", tamanho)
     texto_surface = font.render(msg, True, cor)
     tela.blit(texto_surface, (pos_x, pos_y))
 
-# Função para desenhar botões
 def desenhar_botao(texto, x, y, largura, altura, cor_fundo, cor_texto):
     pygame.draw.rect(tela, cor_fundo, (x, y, largura, altura))
     desenhar_texto(texto, cor_texto, x + largura // 2 - len(texto) * 10 // 2, y + altura // 3)
 
-# Função para verificar clique no botão
 def verificar_clique_botao(mx, my, x, y, largura, altura):
     if x < mx < x + largura and y < my < y + altura:
         return True
     return False
 
-# Função para reiniciar o estado do jogo
 def reiniciar_jogo():
     player = Player()
     enemy = Enemy()
-    meteoros = [Meteoro() for _ in range(8)]  # Agora 8 meteoros, em vez de 5
+    meteoros = [Meteoro() for _ in range(8)]  
     tiros = []
     tiros_inimigo = []
     return player, enemy, meteoros, tiros, tiros_inimigo
 
-# Função principal do jogo
-def jogo():
+# Função principal assíncrona para compatibilidade Web
+async def jogo():
     player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
     pausado = False
     game_over = False
     vitoria = False
-    estado_jogo = "inicio"  # Estados do jogo: "inicio", "jogo", "game_over"
+    estado_jogo = "inicio"  
 
     while True:
+        # Captura de eventos de clique do mouse
+        clique_detectado = False
+        mx, my = pygame.mouse.get_pos()
+
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                return
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                clique_detectado = True
 
-        mx, my = pygame.mouse.get_pos()
         keys = pygame.key.get_pressed()
 
         # Pressionar R para reiniciar o jogo
@@ -205,12 +204,14 @@ def jogo():
             player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
             game_over = False
             vitoria = False
+            estado_jogo = "jogo"
 
+        # Sistema de Telas / Estados do Jogo
         if estado_jogo == "inicio":
             tela.fill(PRETO)
             desenhar_botao("Iniciar Jogo", LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 - 50, 200, 50, AZUL, BRANCO)
 
-            if evento.type == pygame.MOUSEBUTTONDOWN:
+            if clique_detectado:
                 if verificar_clique_botao(mx, my, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 - 50, 200, 50):
                     estado_jogo = "jogo"
 
@@ -227,16 +228,19 @@ def jogo():
                 if tiro_inimigo:
                     tiros_inimigo.append(tiro_inimigo)
 
+                # Movimentação dos tiros do jogador
                 for tiro in tiros[:]:
                     tiro.mover()
                     if tiro.x > LARGURA_TELA:
                         tiros.remove(tiro)
 
-                for tiro_inimigo in tiros_inimigo[:]:
-                    tiro_inimigo.mover()
-                    if tiro_inimigo.x < 0:
-                        tiros_inimigo.remove(tiro_inimigo)
+                # Movimentação dos tiros do inimigo
+                for t_inimigo in tiros_inimigo[:]:
+                    t_inimigo.mover()
+                    if t_inimigo.x < 0:
+                        tiros_inimigo.remove(t_inimigo)
 
+                # Dano no inimigo
                 for tiro in tiros[:]:
                     if enemy.x < tiro.x < enemy.x + 50 and enemy.y < tiro.y < enemy.y + 50:
                         enemy.vida -= 10
@@ -245,6 +249,7 @@ def jogo():
                             vitoria = True
                             game_over = True
 
+                # Tiro destrói meteoro
                 for meteoro in meteoros[:]:
                     for tiro in tiros[:]:
                         if meteoro.colisao_tiro(tiro):
@@ -252,18 +257,21 @@ def jogo():
                             tiros.remove(tiro)
                             break
 
+                # Colisão direta: Jogador vs Inimigo
                 if player.x < enemy.x + 50 and player.x + 50 > enemy.x and player.y < enemy.y + 50 and player.y + 50 > enemy.y:
                     player.vidas -= 1
                     if player.vidas <= 0:
                         game_over = True
 
-                for tiro_inimigo in tiros_inimigo[:]:
-                    if player.x < tiro_inimigo.x < player.x + 50 and player.y < tiro_inimigo.y < player.y + 50:
+                # Jogador atingido por tiro inimigo
+                for t_inimigo in tiros_inimigo[:]:
+                    if player.x < t_inimigo.x < player.x + 50 and player.y < t_inimigo.y < player.y + 50:
                         player.vidas -= 1
-                        tiros_inimigo.remove(tiro_inimigo)
+                        tiros_inimigo.remove(t_inimigo)
                         if player.vidas <= 0:
                             game_over = True
 
+                # Movimentação e colisão dos meteoros
                 for meteoro in meteoros[:]:
                     meteoro.mover()
                     if meteoro.x < 0 or meteoro.y < 0 or meteoro.y > ALTURA_TELA:
@@ -276,10 +284,16 @@ def jogo():
                         if player.vidas <= 0:
                             game_over = True
 
-                while len(meteoros) < 8:  # Agora 8 meteoros, em vez de 5
+                # Mantém a quantidade de meteoros na tela
+                while len(meteoros) < 8:
                     meteoros.append(Meteoro())
 
-            tela.fill(PRETO)
+            # Renderização dos elementos do jogo
+            if fundo_img:
+                tela.blit(fundo_img, (0, 0))
+            else:
+                tela.fill(PRETO)
+
             player.desenhar()
             enemy.desenhar()
             enemy.mostrar_vida()
@@ -290,11 +304,12 @@ def jogo():
             for tiro in tiros:
                 tiro.desenhar()
 
-            for tiro_inimigo in tiros_inimigo:
-                tela.blit(enemy_bullet_img, (tiro_inimigo.x, tiro_inimigo.y))
+            for t_inimigo in tiros_inimigo:
+                tela.blit(enemy_bullet_img, (t_inimigo.x, t_inimigo.y))
 
             desenhar_texto(f'Vidas: {player.vidas}', BRANCO, 10, 10)
 
+            # Tela de Fim de Jogo (Game Over / Vitória)
             if game_over:
                 if vitoria:
                     desenhar_texto("Você Venceu!", BRANCO, LARGURA_TELA // 2 - 80, ALTURA_TELA // 2 - 30, 40)
@@ -303,7 +318,7 @@ def jogo():
 
                 desenhar_botao("Reiniciar", LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 + 20, 200, 50, AZUL, BRANCO)
 
-                if evento.type == pygame.MOUSEBUTTONDOWN:
+                if clique_detectado:
                     if verificar_clique_botao(mx, my, LARGURA_TELA // 2 - 100, ALTURA_TELA // 2 + 20, 200, 50):
                         player, enemy, meteoros, tiros, tiros_inimigo = reiniciar_jogo()
                         game_over = False
@@ -311,6 +326,9 @@ def jogo():
 
         pygame.display.update()
         clock.tick(FPS)
+        
+        # Linha crucial para o Pygbag manter a aba do navegador respondendo
+        await asyncio.sleep(0)
 
-# Rodando o jogo
-jogo()
+# Inicializa o loop assíncrono
+asyncio.run(jogo())
