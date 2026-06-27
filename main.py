@@ -1,7 +1,7 @@
 import pygame
 import random
 import time
-import streamlit as None
+import streamlit as st
 from streamlit_pygame import streamlit_pygame
 
 # Inicializando o Pygame
